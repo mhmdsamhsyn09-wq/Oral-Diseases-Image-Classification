@@ -47,19 +47,91 @@ CUSTOM_CSS = """
         margin: 6px 0 0;
         font-size: 1rem;
     }
-    .result-card-ok {
-        background: #f0f9ff;
-        border-left: 4px solid #0284c7;
-        border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 14px;
+    .diag-card {
+        border-radius: 14px;
+        padding: 16px 20px;
+        margin-bottom: 18px;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+        border: 1px solid #e2e8f0;
     }
-    .result-card-warn {
-        background: #fffbeb;
-        border-left: 4px solid #d97706;
+    .diag-card-ok {
+        background: linear-gradient(135deg, #f0f9ff 0%, #eff6ff 100%);
+        border-left: 5px solid #0284c7;
+    }
+    .diag-card-warn {
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border-left: 5px solid #d97706;
+    }
+    .diag-top-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+    }
+    .diag-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .diag-badge {
+        background: #0284c7;
+        color: #ffffff;
+        font-size: 0.85rem;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 999px;
+    }
+    .diag-badge-warn {
+        background: #d97706;
+    }
+    .diag-sub {
+        font-size: 0.92rem;
+        color: #475569;
+        margin: 0;
+    }
+    .prob-row {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 10px;
-        padding: 14px 16px;
-        margin-bottom: 14px;
+        padding: 10px 14px;
+        margin-bottom: 9px;
+    }
+    .prob-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.94rem;
+        margin-bottom: 6px;
+    }
+    .prob-name {
+        font-weight: 600;
+        color: #1e293b;
+    }
+    .prob-name-top {
+        font-weight: 700;
+        color: #0369a1;
+    }
+    .prob-pct {
+        font-weight: 700;
+        color: #334155;
+        font-variant-numeric: tabular-nums;
+    }
+    .prob-track {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .prob-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #0ea5e9 0%, #2563eb 100%);
+        border-radius: 999px;
+    }
+    .prob-fill-top {
+        background: linear-gradient(90deg, #0284c7 0%, #1d4ed8 100%);
     }
     footer {visibility: hidden;}
 </style>
@@ -378,109 +450,18 @@ with tab_diag:
 
           if conf >= CONF_THRESHOLD:
             status = "Confident"
-            headline = f"Prediction: **{pred_class}**"
-            detail = f"Confidence: **{conf:.1%}**"
+            title_html = f"Prediction: {pred_class}"
+            badge_text = f"{conf:.1%} Confidence"
+            sub_html = "High-confidence classification result."
             is_low_conf = False
           else:
             status = "Low confidence"
-            headline = f"Low confidence ({conf:.1%})"
-            detail = (
-                f"Best guess: **{pred_class}**. Try a clearer, well-lit"
+            title_html = f"Best Guess: {pred_class}"
+            badge_text = f"{conf:.1%} Low Confidence"
+            sub_html = (
+                "Confidence is below threshold. Try a clearer, well-lit"
                 " close-up image."
             )
             is_low_conf = True
 
-          _append_history(pred_class, conf, status, PREPROCESS)
-          st.session_state.last_prediction = {
-              "headline": headline,
-              "detail": detail,
-              "is_low_conf": is_low_conf,
-              "probs": {
-                  CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))
-              },
-          }
-
-  with col_right:
-    st.subheader("Diagnosis Output")
-    pred_state = st.session_state.last_prediction
-    if pred_state is None:
-      st.info("Upload an image and click **Classify** to see the prediction.")
-    else:
-      card_cls = (
-          "result-card-warn" if pred_state["is_low_conf"] else "result-card-ok"
-      )
-      st.markdown(
-          f"""
-          <div class="{card_cls}">
-              <div style="font-size: 1.15rem; margin-bottom: 4px;">{pred_state["headline"]}</div>
-              <div>{pred_state["detail"]}</div>
-          </div>
-          """,
-          unsafe_allow_html=True,
-      )
-      st.markdown("**Class probabilities**")
-      sorted_probs = sorted(
-          pred_state["probs"].items(), key=lambda x: x[1], reverse=True
-      )
-      for cls_name, prob_val in sorted_probs:
-        pct = prob_val * 100.0
-        st.markdown(f"**{cls_name}** — `{pct:.1f}%`")
-        st.progress(min(max(float(prob_val), 0.0), 1.0))
-
-# --------------------------------------------------------------------- Tab 2: Model Results
-with tab_results:
-  st.markdown("## ResNet50V2 - saved results")
-  st.markdown(_saved_metrics_md(), unsafe_allow_html=True)
-
-  curves_img = _img_path("training_curves.png")
-  cm_img = _img_path("confusion_matrix.png")
-
-  if curves_img or cm_img:
-    p_col1, p_col2 = st.columns(2, gap="medium")
-    with p_col1:
-      if curves_img:
-        st.image(
-            curves_img, caption="Training curves", use_container_width=True
-        )
-    with p_col2:
-      if cm_img:
-        st.image(cm_img, caption="Confusion matrix", use_container_width=True)
-  else:
-    st.caption(
-        "_No saved plots yet. Put `confusion_matrix.png` or `training_curves.png` inside `results/`._"
-    )
-
-  st.markdown("### Model comparison")
-  st.dataframe(_comparison_df(), use_container_width=True, hide_index=True)
-
-  st.markdown("## 🕒 Prediction History")
-  st.caption(
-      "Saved predictions appear here automatically and stay available across sessions."
-  )
-  st.dataframe(
-      _history_df(),
-      column_config={col: col for col in HISTORY_COLUMNS},
-      use_container_width=True,
-      hide_index=True,
-  )
-  if st.button("Clear history", type="secondary"):
-    clear_history()
-    st.rerun()
-
-# --------------------------------------------------------------------- Tab 3: About
-with tab_about:
-  st.markdown(
-      f"""
-      **Task:** classify oral-disease images into their categories.
-
-      **Model:** ResNet50V2 fine-tuned (best of the compared models: custom CNN vs pretrained networks).
-
-      **Model Hub:** `{HF_MODEL_REPO}`
-
-      **Classes:** {", ".join(CLASSES) if CLASSES else "n/a"}
-
-      **Input size:** {SIZE[0]}x{SIZE[1]}
-
-      > ⚠️ This tool is for educational purposes only and is **not** a medical diagnosis. Consult a qualified dentist or physician.
-      """
-  )
+          _append
