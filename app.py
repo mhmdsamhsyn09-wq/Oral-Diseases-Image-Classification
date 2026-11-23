@@ -464,4 +464,118 @@ with tab_diag:
             )
             is_low_conf = True
 
-          _append
+          _append_history(pred_class, conf, status, PREPROCESS)
+          st.session_state.last_prediction = {
+              "title": title_html,
+              "badge": badge_text,
+              "sub": sub_html,
+              "is_low_conf": is_low_conf,
+              "probs": {
+                  CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))
+              },
+          }
+
+  with col_right:
+    st.subheader("Diagnosis Output")
+    pred_state = st.session_state.last_prediction
+    if pred_state is None:
+      st.info("Upload an image and click **Classify** to see the prediction.")
+    else:
+      is_warn = pred_state["is_low_conf"]
+      card_cls = "diag-card diag-card-warn" if is_warn else "diag-card diag-card-ok"
+      badge_cls = "diag-badge diag-badge-warn" if is_warn else "diag-badge"
+
+      st.markdown(
+          f"""
+          <div class="{card_cls}">
+              <div class="diag-top-row">
+                  <div class="diag-title">{pred_state["title"]}</div>
+                  <span class="{badge_cls}">{pred_state["badge"]}</span>
+              </div>
+              <p class="diag-sub">{pred_state["sub"]}</p>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
+
+      st.markdown("#### Class Probabilities")
+      sorted_probs = sorted(
+          pred_state["probs"].items(), key=lambda x: x[1], reverse=True
+      )
+      for idx_p, (cls_name, prob_val) in enumerate(sorted_probs):
+        pct = min(max(float(prob_val) * 100.0, 0.0), 100.0)
+        is_top = idx_p == 0
+        name_cls = "prob-name-top" if is_top else "prob-name"
+        fill_cls = "prob-fill prob-fill-top" if is_top else "prob-fill"
+        st.markdown(
+            f"""
+            <div class="prob-row">
+                <div class="prob-header">
+                    <span class="{name_cls}">{cls_name}</span>
+                    <span class="prob-pct">{pct:.1f}%</span>
+                </div>
+                <div class="prob-track">
+                    <div class="{fill_cls}" style="width: {pct:.1f}%;"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+# --------------------------------------------------------------------- Tab 2: Model Results
+with tab_results:
+  st.markdown("## ResNet50V2 - saved results")
+  st.markdown(_saved_metrics_md(), unsafe_allow_html=True)
+
+  curves_img = _img_path("training_curves.png")
+  cm_img = _img_path("confusion_matrix.png")
+
+  if curves_img or cm_img:
+    p_col1, p_col2 = st.columns(2, gap="medium")
+    with p_col1:
+      if curves_img:
+        st.image(
+            curves_img, caption="Training curves", use_container_width=True
+        )
+    with p_col2:
+      if cm_img:
+        st.image(cm_img, caption="Confusion matrix", use_container_width=True)
+  else:
+    st.caption(
+        "_No saved plots yet. Put `confusion_matrix.png` or `training_curves.png` inside `results/`._"
+    )
+
+  st.markdown("### Model comparison")
+  st.dataframe(_comparison_df(), use_container_width=True, hide_index=True)
+
+  st.markdown("## 🕒 Prediction History")
+  st.caption(
+      "Saved predictions appear here automatically and stay available across sessions."
+  )
+  st.dataframe(
+      _history_df(),
+      column_config={col: col for col in HISTORY_COLUMNS},
+      use_container_width=True,
+      hide_index=True,
+  )
+  if st.button("Clear history", type="secondary"):
+    clear_history()
+    st.rerun()
+
+# --------------------------------------------------------------------- Tab 3: About
+with tab_about:
+  st.markdown(
+      f"""
+      **Task:** classify oral-disease images into their categories.
+
+      **Model:** ResNet50V2 fine-tuned (best of the compared models: custom CNN vs pretrained networks).
+
+      **Model Hub:** `{HF_MODEL_REPO}`
+
+      **Classes:** {", ".join(CLASSES) if CLASSES else "n/a"}
+
+      **Input size:** {SIZE[0]}x{SIZE[1]}
+
+      > ⚠️ This tool is for educational purposes only and is **not** a medical diagnosis. Consult a qualified dentist or physician.
+      """
+  )
