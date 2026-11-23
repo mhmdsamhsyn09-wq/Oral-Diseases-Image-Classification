@@ -1,27 +1,28 @@
-# Oral Disease Classifier - Gradio App
+# 🦷 Oral Disease Classifier (ResNet50V2)
 
-## Folder layout
-```
-app.py
-requirements.txt
-best_resnet.pth        <- your saved ResNet weights
-classes.json           <- optional, e.g. ["Calculus", "Caries", ...] (same order as training)
-results/               <- optional, shown in the "Model Results" tab
-    metrics.json       {"accuracy": 0.95, "precision": 0.94, "recall": 0.94, "f1": 0.94}
-    confusion_matrix.png
-    training_curves.png
-    comparison.csv     model,accuracy,f1
-data/test/             <- optional ImageFolder test set for live evaluation
-```
+An end-to-end deep learning web application for classifying oral disease images using a fine-tuned **ResNet50V2** model, built with **Streamlit** and integrated with **Hugging Face Hub** for automatic model weight retrieval.
 
-## Run
-```
-pip install -r requirements.txt
-python app.py
-```
-If your weights use a different ResNet, set it: `ARCH=resnet18 MODEL_PATH=my_model.pth python app.py`
-(on Windows PowerShell: `$env:ARCH="resnet18"; python app.py`).
+## 📌 Overview
 
-## Run on Kaggle / Colab
-Upload the files, `!pip install -q gradio`, then in `app.py` change the last line to
-`demo.launch(share=True)` to get a public link.
+This application classifies clinical/oral images into **6 categories**:
+- **Calculus**
+- **Data caries**
+- **Gingivitis**
+- **Mouth Ulcer**
+- **Tooth Discoloration**
+- **Hypodontia**
+
+## ✨ Key Features
+
+- **🔍 Diagnosis Tab:** Upload oral images (`PNG`, `JPG`, `JPEG`, `WEBP`), view confidence-aware predictions, and inspect full class probability distributions.
+- **📊 Model Results Tab:** Displays saved evaluation metrics (`results/metrics.json`), training curves, confusion matrix, model comparison table (`results/comparison.csv`), and persistent prediction history (`results/history.json`).
+- **☁️ Automatic Hub Model Loading:** Checks for a local `ResNet50V2.keras` file first and automatically downloads it from [`mo123essam/oral-disease-resnet50v2`](https://huggingface.co/mo123essam/oral-disease-resnet50v2) if not found locally.
+- **🔧 Cross-Version Keras Compatibility:** Automatically strips unsupported `quantization_config` metadata when loading `.keras` archives across differing TensorFlow/Keras environments.
+
+## 🗂️ Project Structure
+
+```text
+├── app.py              # Streamlit web application & inference pipeline
+├── requirements.txt    # Python dependencies
+├── README.md           # Project documentation
+└── results/            # Optional metrics, plots, comparison table & history
