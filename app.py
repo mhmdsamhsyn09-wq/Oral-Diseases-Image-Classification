@@ -299,8 +299,188 @@ def _saved_metrics_md() -> str:
     m = json.loads(p.read_text(encoding="utf-8"))
   except Exception:
     return "_Could not parse `results/metrics.json`._"
-  parts = [
-      f"**{k.replace('_', ' ').title()}:** {v:.2%}"
-      if isinstance(v, float) and v <= 1
-      else f"**{k}:** {v}"
-      for k, v
+  if not isinstance(m, dict) or not m:
+    return "_Empty `metrics.json`._"
+  parts = []
+  for k, v in m.items():
+    label = str(k).replace("_", " ").title()
+    if isinstance(v, float) and 0.0 <= v <= 1.0:
+      parts.append(f"**{label}:** {v:.2%}")
+    else:
+      parts.append(f"**{label}:** {v}")
+  return " &nbsp;|&nbsp; ".join(parts)
+
+
+# ===================================================================== UI
+st.markdown(
+    """
+    <div id='hero'>
+        <h1>🦷 Oral Disease Classifier</h1>
+        <p>Deep-learning diagnosis support powered by ResNet50V2</p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+if MODEL is None:
+  st.warning(f"⚠️ {MODEL_ERROR}")
+
+if "last_prediction" not in st.session_state:
+  st.session_state.last_prediction = None
+if "uploader_key" not in st.session_state:
+  st.session_state.uploader_key = 0
+
+
+def reset_image():
+  st.session_state.uploader_key += 1
+  st.session_state.last_prediction = None
+
+
+tab_diag, tab_results, tab_about = st.tabs(
+    ["🔍 Diagnosis", "📊 Model Results", "ℹ️ About"]
+)
+
+# --------------------------------------------------------------------- Tab 1: Diagnosis
+with tab_diag:
+  col_left, col_right = st.columns([1, 1], gap="large")
+
+  with col_left:
+    uploaded_file = st.file_uploader(
+        "Upload an oral image",
+        type=["png", "jpg", "jpeg", "webp"],
+        key=f"oral_uploader_{st.session_state.uploader_key}",
+    )
+
+    pil_img = None
+    if uploaded_file is not None:
+      pil_img = Image.open(uploaded_file)
+      st.image(pil_img, caption="Uploaded Oral Image", use_container_width=True)
+
+    b_col1, b_col2 = st.columns([1, 1])
+    with b_col1:
+      st.button("Clear", on_click=reset_image, use_container_width=True)
+    with b_col2:
+      classify_clicked = st.button(
+          "Classify", type="primary", use_container_width=True
+      )
+
+    if classify_clicked:
+      if MODEL is None:
+        st.error(MODEL_ERROR)
+      elif pil_img is None:
+        st.error("Please upload an image first.")
+      else:
+        with st.spinner("Analyzing oral image..."):
+          probs = predict_probs([pil_img], PREPROCESS)[0]
+          top_idx = int(probs.argmax())
+          conf = float(probs[top_idx])
+          pred_class = CLASSES[top_idx]
+
+          if conf >= CONF_THRESHOLD:
+            status = "Confident"
+            headline = f"Prediction: **{pred_class}**"
+            detail = f"Confidence: **{conf:.1%}**"
+            is_low_conf = False
+          else:
+            status = "Low confidence"
+            headline = f"Low confidence ({conf:.1%})"
+            detail = (
+                f"Best guess: **{pred_class}**. Try a clearer, well-lit"
+                " close-up image."
+            )
+            is_low_conf = True
+
+          _append_history(pred_class, conf, status, PREPROCESS)
+          st.session_state.last_prediction = {
+              "headline": headline,
+              "detail": detail,
+              "is_low_conf": is_low_conf,
+              "probs": {
+                  CLASSES[i]: float(probs[i]) for i in range(len(CLASSES))
+              },
+          }
+
+  with col_right:
+    st.subheader("Diagnosis Output")
+    pred_state = st.session_state.last_prediction
+    if pred_state is None:
+      st.info("Upload an image and click **Classify** to see the prediction.")
+    else:
+      card_cls = (
+          "result-card-warn" if pred_state["is_low_conf"] else "result-card-ok"
+      )
+      st.markdown(
+          f"""
+          <div class="{card_cls}">
+              <div style="font-size: 1.15rem; margin-bottom: 4px;">{pred_state["headline"]}</div>
+              <div>{pred_state["detail"]}</div>
+          </div>
+          """,
+          unsafe_allow_html=True,
+      )
+      st.markdown("**Class probabilities**")
+      sorted_probs = sorted(
+          pred_state["probs"].items(), key=lambda x: x[1], reverse=True
+      )
+      for cls_name, prob_val in sorted_probs:
+        pct = prob_val * 100.0
+        st.markdown(f"**{cls_name}** — `{pct:.1f}%`")
+        st.progress(min(max(float(prob_val), 0.0), 1.0))
+
+# --------------------------------------------------------------------- Tab 2: Model Results
+with tab_results:
+  st.markdown("## ResNet50V2 - saved results")
+  st.markdown(_saved_metrics_md(), unsafe_allow_html=True)
+
+  curves_img = _img_path("training_curves.png")
+  cm_img = _img_path("confusion_matrix.png")
+
+  if curves_img or cm_img:
+    p_col1, p_col2 = st.columns(2, gap="medium")
+    with p_col1:
+      if curves_img:
+        st.image(
+            curves_img, caption="Training curves", use_container_width=True
+        )
+    with p_col2:
+      if cm_img:
+        st.image(cm_img, caption="Confusion matrix", use_container_width=True)
+  else:
+    st.caption(
+        "_No saved plots yet. Put `confusion_matrix.png` or `training_curves.png` inside `results/`._"
+    )
+
+  st.markdown("### Model comparison")
+  st.dataframe(_comparison_df(), use_container_width=True, hide_index=True)
+
+  st.markdown("## 🕒 Prediction History")
+  st.caption(
+      "Saved predictions appear here automatically and stay available across sessions."
+  )
+  st.dataframe(
+      _history_df(),
+      column_config={col: col for col in HISTORY_COLUMNS},
+      use_container_width=True,
+      hide_index=True,
+  )
+  if st.button("Clear history", type="secondary"):
+    clear_history()
+    st.rerun()
+
+# --------------------------------------------------------------------- Tab 3: About
+with tab_about:
+  st.markdown(
+      f"""
+      **Task:** classify oral-disease images into their categories.
+
+      **Model:** ResNet50V2 fine-tuned (best of the compared models: custom CNN vs pretrained networks).
+
+      **Model Hub:** `{HF_MODEL_REPO}`
+
+      **Classes:** {", ".join(CLASSES) if CLASSES else "n/a"}
+
+      **Input size:** {SIZE[0]}x{SIZE[1]}
+
+      > ⚠️ This tool is for educational purposes only and is **not** a medical diagnosis. Consult a qualified dentist or physician.
+      """
+  )
