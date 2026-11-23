@@ -1,8 +1,6 @@
-gradio>=4.40
-tensorflow
-protobuf>=5.28.0,<7
-pillow
-numpy
-pandas
-matplotlib
-scikit-learn
+streamlit>=1.35.0
+tensorflow>=2.15.0
+huggingface-hub>=0.23.0
+numpy>=1.24.0
+pandas>=2.0.0
+pillow>=10.0.0
