@@ -1,0 +1,8 @@
+gradio>=4.40
+tensorflow
+protobuf>=5.28.0,<7
+pillow
+numpy
+pandas
+matplotlib
+scikit-learn
